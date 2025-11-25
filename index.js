@@ -10,6 +10,8 @@ import dispachersRouter from "./dispachers.js";
 import taxiAssignmentRouter from "./taxiAssignment.js";
 import  taxisRouter from "./taxis.js";
 import PassengerQueueRouter  from "./PassengerQueue.js";
+import dispacherRouteRouter from "./dispacherRoute.js";
+import taxiQueueRouter from "./taxiQueue.js";
 
 
 dotenv.config();
@@ -22,8 +24,8 @@ app.use("/dispachers", dispachersRouter);
 app.use("/taxiAssignment", taxiAssignmentRouter);
 app.use("/taxis", taxisRouter);
 app.use("/passengerqueue", PassengerQueueRouter);
-
-
+app.use("/dispacher-route", dispacherRouteRouter);
+app.use("/taxi-queue", taxiQueueRouter);
 
 
 

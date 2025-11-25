@@ -114,20 +114,20 @@ function verifyToken(req, res, next) {
 
 // Create a new taxi
 router.post("/", verifyToken, async (req, res) => {
-  const { DriversName, LicenceNo, PlateNo, route_id } = req.body;
+  const { DriversName, LicenceNo, PlateNo, route} = req.body;
 
   if (req.user.role !== "dispacher") {
     return res.status(403).json({ message: "Forbidden: only dispatchers can create taxis" });
   }
 
-  if (!DriversName || !LicenceNo || !PlateNo || !route_id) {
+  if (!DriversName || !LicenceNo || !PlateNo || !route) {
     return res.status(400).json({ message: "All fields are required" });
   }
 
   try {
     const result = await query(
-      "INSERT INTO taxis (DriversName, LicenceNo, PlateNo, route_id) VALUES (?, ?, ?, ?)",
-      [DriversName, LicenceNo, PlateNo, route_id]
+      "INSERT INTO taxis (DriversName, LicenceNo, PlateNo, route, dispacher_id) VALUES (?, ?, ?, ?, ?)",
+      [DriversName, LicenceNo, PlateNo, route,req.user.id]
     );
 
     res.status(201).json({ message: "Taxi created successfully", id: result.insertId });
@@ -138,6 +138,24 @@ router.post("/", verifyToken, async (req, res) => {
 });
 
 // Get all taxis for a dispatcher’s route
+// router.get("/", verifyToken, async (req, res) => {
+//   if (req.user.role !== "dispacher") {
+//     return res.status(403).json({ message: "Forbidden: only dispatchers can view taxis" });
+//   }
+
+//   try {
+//     const rows = await query(
+//       "SELECT PlateNo FROM taxis WHERE dispacher_id = ?",
+//       [req.user.route_id] // make sure route_id is included in the token
+//     );
+//     res.json(rows);
+//   } catch (err) {
+//     console.error("Fetch taxis error:", err);
+//     res.status(500).json({ message: err.sqlMessage || err.message });
+//   }
+// });
+
+
 router.get("/", verifyToken, async (req, res) => {
   if (req.user.role !== "dispacher") {
     return res.status(403).json({ message: "Forbidden: only dispatchers can view taxis" });
@@ -145,15 +163,19 @@ router.get("/", verifyToken, async (req, res) => {
 
   try {
     const rows = await query(
-      "SELECT * FROM taxis WHERE route_id = ?",
-      [req.user.route_id] // make sure route_id is included in the token
+      "SELECT PlateNo FROM taxis WHERE dispacher_id = ?",
+      [req.user.id]
     );
+
     res.json(rows);
+
   } catch (err) {
     console.error("Fetch taxis error:", err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
+
+
 
 // Update taxi
 router.put("/:id", verifyToken, async (req, res) => {
