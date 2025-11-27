@@ -12,7 +12,7 @@ import  taxisRouter from "./taxis.js";
 import PassengerQueueRouter  from "./PassengerQueue.js";
 import dispacherRouteRouter from "./dispacherRoute.js";
 import taxiQueueRouter from "./taxiQueue.js";
-
+import assignTaxisRouter from "./assignTaxis.js";
 
 dotenv.config();
 
@@ -26,7 +26,7 @@ app.use("/taxis", taxisRouter);
 app.use("/passengerqueue", PassengerQueueRouter);
 app.use("/dispacher-route", dispacherRouteRouter);
 app.use("/taxi-queue", taxiQueueRouter);
-
+app.use("/assignTaxis", assignTaxisRouter);
 
 
 const query = promisify(db.query).bind(db);

@@ -40,7 +40,7 @@ function verifyToken(req, res, next) {
 
 
 router.post("/", verifyToken, async (req, res) => {
-  const { waiting_count } = req.body;
+  const { waiting_count,route } = req.body;
   if (!waiting_count) return res.status(400).json({ message: "Waiting count required" });
 
   try {
@@ -61,8 +61,8 @@ router.post("/", verifyToken, async (req, res) => {
 
     // Add new
     await query(
-      "INSERT INTO passengerqueue (dispatcher_id, WaitingCount) VALUES (?, ?)",
-      [req.user.id, waiting_count]
+      "INSERT INTO passengerqueue (dispacher_id, WaitingCount,route) VALUES (?, ?, ?)",
+      [req.user.id, waiting_count,route]
     );
     res.json({ message: "Passenger count added" });
   } catch (err) {
@@ -71,21 +71,20 @@ router.post("/", verifyToken, async (req, res) => {
 });
 
 
-router.get("/", verifyToken, async (req, res) => {
-   if (req.user.role !== "dispacher") {
-    return res.status(403).json({ message: "Forbidden: only dispatchers can view taxis" });
-  }
-  try {
-    const rows = await query("SELECT * FROM  Passengerqueue WHERE dispacher_id = ?",
-       [req.user.id]
-    );
-    res.json(rows);
+// router.get("/", verifyToken, async (req, res) => {
 
-  } catch (err) {
-    console.error("Fetching error:", err);
-    res.status(500).json({ message: err.sqlMessage || err.message });
-  }
-});
+//   try {
+//     const rows = await query("SELECT  WaitingCount FROM  Passengerqueue  WHERE route = CONCAT(r.StartTerminal, ' → ', r.EndTerminal)",
+//        [req.user.id]
+//     );
+//     res.json(rows);
+
+//   } catch (err) {
+//     console.error("Fetching error:", err);
+//     res.status(500).json({ message: err.sqlMessage || err.message });
+//   }
+// });
+
 
 router.put("/:id",verifyToken, async (req, res) => {
   const { id } = req.params;
