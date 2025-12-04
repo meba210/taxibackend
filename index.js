@@ -36,7 +36,7 @@ app.post("/auth/login", async (req, res) => {
     return res.status(400).json({ message: "Username and password required" });
 
   try {
-    // 1️⃣ Check stationadmins
+   
     const adminResults = await query(
       "SELECT id, UserName, Password, role_id FROM stationadmins WHERE UserName = ?",
       [UserName]
@@ -46,7 +46,7 @@ app.post("/auth/login", async (req, res) => {
       if (Password !== admin.Password)
         return res.status(400).json({ message: "Incorrect password" });
 
-      // Include stationId in JWT
+     
        const token = jwt.sign(
         { id: admin.id, role: "stationAdmin" },
         process.env.JWT_SECRET,
@@ -56,7 +56,7 @@ app.post("/auth/login", async (req, res) => {
       return res.json({ message: "Login successful", role: "stationAdmin", token });
     }
 
-    // 2️⃣ Check dispachers
+   
     const dispatcherResults = await query(
       "SELECT id, UserName, Password, role_id FROM dispachers WHERE UserName = ?",
       [UserName]
@@ -70,7 +70,7 @@ app.post("/auth/login", async (req, res) => {
       return res.json({ message: "Login successful", role: "dispacher", token });
     }
 
-    // 3️⃣ Check roles table for admin/user
+    
     const userResults = await query(
       "SELECT id, UserName, Password, role FROM roles WHERE UserName = ?",
       [UserName]
@@ -108,22 +108,6 @@ function verifyToken(req, res, next) {
   });
 }
 
-
-// function verifyStationAdmin(req, res, next) {
-//   if (req.user.role !== "stationAdmin")
-//     return res.status(403).json({ message: "Forbidden: Station Admins only" });
-//   next();
-// }
-
-// app.get("/routes/mine", verifyToken, verifyStationAdmin, async (req, res) => {
-//   try {
-//     const StationAdmins_id = req.user.StationAdmins_id;
-//     const routes = await query("SELECT * FROM routes WHERE StationAdmins_id = ?", [StationAdmins_id]);
-//     res.json(routes);
-//   } catch (err) {
-//     res.status(500).json({ message: "DB error", error: err });
-//   }
-// });
 
 
 // ✅ Example protected route

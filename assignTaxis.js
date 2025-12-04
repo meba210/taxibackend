@@ -17,8 +17,8 @@ function verifyToken(req, res, next) {
 }
 
 router.post("/", verifyToken, async (req, res) => {
-  const { taxi_ids, to_route } = req.body;
-  if (!taxi_ids || !to_route)
+  const { taxi_ids, from_route,to_route } = req.body;
+  if (!taxi_ids || !from_route|| !to_route)
     return res.status(400).json({ message: "PlateNo or route required" });
 
   try {
@@ -37,8 +37,8 @@ router.post("/", verifyToken, async (req, res) => {
     // 2. Insert each taxi into assignTaxi table with route name
     for (const plateNo of taxi_ids) {
       await query(
-        "INSERT INTO assigntaxi (PlateNo, route) VALUES (?, ?)",
-        [plateNo, routeName]
+        "INSERT INTO assigntaxi (PlateNo,from_route,to_route) VALUES (?, ?, ?)",
+        [plateNo, from_route, routeName]
       );
     }
 
@@ -82,7 +82,7 @@ router.get("/assignedTaxis", verifyToken, async (req, res) => {
   if (!route) return res.status(400).json({ message: "Route required" });
 
   try {
-    const taxis = await query("SELECT PlateNo FROM assigntaxi WHERE route = ?", [route]);
+    const taxis = await query("SELECT PlateNo FROM assigntaxi WHERE to_route = ?", [route]);
     res.json(taxis);
   } catch (err) {
     console.error(err);
@@ -98,8 +98,9 @@ router.get("/assigned", verifyToken, async (req, res) => {
 
   try {
     const rows = await query(
-      "SELECT PlateNo, Status FROM assigntaxi WHERE route = ?",
-      [route]
+     "SELECT PlateNo, from_route,Status FROM assigntaxi"
+,
+      //[route]
     );
     res.json(rows);
   } catch (err) {
@@ -107,5 +108,18 @@ router.get("/assigned", verifyToken, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+router.delete("/:plateNo", verifyToken, async (req, res) => {
+  const { plateNo } = req.params;
+
+  try {
+    await query("DELETE FROM assigntaxi WHERE PlateNo =?", [plateNo]);
+    res.json({ message: "Taxi removed from assigned list" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 export default router;

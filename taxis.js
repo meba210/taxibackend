@@ -137,7 +137,9 @@ router.post("/", verifyToken, async (req, res) => {
   }
 });
 
-// Get all taxis for a dispatcher’s route
+
+
+
 // router.get("/", verifyToken, async (req, res) => {
 //   if (req.user.role !== "dispacher") {
 //     return res.status(403).json({ message: "Forbidden: only dispatchers can view taxis" });
@@ -146,34 +148,54 @@ router.post("/", verifyToken, async (req, res) => {
 //   try {
 //     const rows = await query(
 //       "SELECT PlateNo FROM taxis WHERE dispacher_id = ?",
-//       [req.user.route_id] // make sure route_id is included in the token
+//       [req.user.id]
 //     );
+
 //     res.json(rows);
+
 //   } catch (err) {
 //     console.error("Fetch taxis error:", err);
 //     res.status(500).json({ message: err.sqlMessage || err.message });
 //   }
 // });
 
-
 router.get("/", verifyToken, async (req, res) => {
   if (req.user.role !== "dispacher") {
-    return res.status(403).json({ message: "Forbidden: only dispatchers can view taxis" });
+    return res.status(403).json({ message: "Forbidden" });
   }
 
   try {
-    const rows = await query(
-      "SELECT PlateNo FROM taxis WHERE dispacher_id = ?",
-      [req.user.id]
-    );
+    const { route } = req.query;
 
-    res.json(rows);
+    if (!route) {
+      return res.status(400).json({ message: "Route is required" });
+    }
+
+    // normalize dispatcher route
+    const [startD, endD] = route.split("→").map(s => s.trim());
+    const normalizedDispatcherRoute = [startD, endD].sort().join(" | ");
+
+    // get all taxis
+    const rows = await query("SELECT PlateNo, route FROM taxis");
+
+    // filter only vice-versa matches
+    const filtered = rows.filter(taxi => {
+      if (!taxi.route) return false;
+
+      const [start, end] = taxi.route.split("→").map(s => s.trim());
+      const normalizedTaxiRoute = [start, end].sort().join(" | ");
+
+      return normalizedTaxiRoute === normalizedDispatcherRoute;
+    });
+
+    res.json(filtered);
 
   } catch (err) {
     console.error("Fetch taxis error:", err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
+
 
 
 

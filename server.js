@@ -15,7 +15,7 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: (origin, callback) => {
-      callback(null, origin); // reflect the request origin
+      callback(null, origin); 
     },
     credentials: true,
   })

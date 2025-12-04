@@ -61,7 +61,7 @@ router.delete("/:PlateNo", verifyToken, async (req, res) => {
 
   try {
     const result = await query(
-      "DELETE FROM taxi_queue WHERE PlateNo = ? AND dispacher_id = ?",
+      "DELETE FROM taxi_queue WHERE PlateNo = ?",
       [PlateNo, req.user.id]
     );
 
@@ -75,9 +75,6 @@ router.delete("/:PlateNo", verifyToken, async (req, res) => {
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
-
-
-
 
 
 

@@ -20,41 +20,63 @@ router.post("/", (req, res) => {
   });
 });
 
+// router.get("/", (req, res) => {
+//   const sql = `
+//     SELECT sa.id, sa.FullName, sa.Email, sa.PhoneNumber, sa.UserName, sa.Stations 
+//     FROM stationadmins sa
+//   `;
+
+//   db.query(sql, (err, results) => {
+//     if (err) {
+//       console.error("❌ Error fetching station admins:", err);
+//       return res.status(500).json({ message: "Database error" });
+//     }
+
+//     // Map results to display the station name for the table
+//     // const formatted = results.map((r) => ({
+//     //   ...r,
+//     //   Stations: r.StationName,  // <-- this will show in your table
+//     // }));
+
+//     res.status(200).json(formatted);
+//   });
+// });
+
 router.get("/", (req, res) => {
-  const sql = `
-    SELECT sa.id, sa.FullName, sa.Email, sa.PhoneNumber, sa.UserName, 
-           sa.Stations AS StationID,
-           s.StationName
-    FROM stationadmins sa
-    LEFT JOIN stations s ON sa.Stations = s.id
-  `;
+  try {
+    const sql = "SELECT * FROM stationadmins";
 
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error("❌ Error fetching station admins:", err);
-      return res.status(500).json({ message: "Database error" });
-    }
+    db.query(sql, (err, results) => {
+      if (err) {
+        console.error("Fetching error:", err);
+        return res.status(500).json({ 
+          message: err.sqlMessage || err.message 
+        });
+      }
 
-    // Map results to display the station name for the table
-    const formatted = results.map((r) => ({
-      ...r,
-      Stations: r.StationName,  // <-- this will show in your table
-    }));
+      res.status(200).json(results);
+    });
 
-    res.status(200).json(formatted);
-  });
+  } catch (err) {
+    console.error("Fetching error:", err);
+    res.status(500).json({ 
+      message: err.sqlMessage || err.message 
+    });
+  }
 });
+
+
 
 router.put("/:id", (req, res) => {
   const { id } = req.params;
-  const { FullName, Email, PhoneNumber, UserName,selectedStation } = req.body;
+  const { FullName, Email, PhoneNumber, UserName, Stations} = req.body;
 
   const sql = `
     UPDATE stationadmins 
     SET FullName=?, Email=?, PhoneNumber=?, UserName=?, Stations=? 
     WHERE id=?
   `;
-  db.query(sql, [FullName, Email, PhoneNumber, UserName, selectedStation, id], (err, result) => {
+  db.query(sql, [FullName, Email, PhoneNumber, UserName,  Stations, id], (err, result) => {
     if (err) {
       console.error("❌ Error updating station admin:", err);
       return res.status(500).json({ message: "Database error", error: err });
