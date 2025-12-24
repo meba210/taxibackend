@@ -24,7 +24,7 @@ router.post("/", verifyToken, async (req, res) => {
   try {
     // 1. Get route name from routes table
     const routeResult = await query(
-      "SELECT StartTerminal, EndTerminal FROM routes WHERE id = ?",
+      "SELECT station_name, EndTerminal FROM routes WHERE id = ?",
       [to_route]
     );
 
@@ -32,7 +32,7 @@ router.post("/", verifyToken, async (req, res) => {
       return res.status(404).json({ message: "Route not found" });
     }
 
-    const routeName = `${routeResult[0].StartTerminal} → ${routeResult[0].EndTerminal}`;
+    const routeName = `${routeResult[0].station_name} → ${routeResult[0].EndTerminal}`;
 
     // 2. Insert each taxi into assignTaxi table with route name
     for (const plateNo of taxi_ids) {
@@ -62,9 +62,10 @@ router.get("/", verifyToken, async (req, res) => {
      SELECT 
           t.id,
           t.PlateNo,
-         t.route
+         t.route,
+         t.Status
      FROM taxi_queue t
-       WHERE route = ?
+       WHERE route = ? AND Status = 'available'
   ORDER BY t.PlateNo ASC
       `,
       [routeName]
@@ -82,7 +83,7 @@ router.get("/assignedTaxis", verifyToken, async (req, res) => {
   if (!route) return res.status(400).json({ message: "Route required" });
 
   try {
-    const taxis = await query("SELECT PlateNo FROM assigntaxi WHERE to_route = ?", [route]);
+    const taxis = await query("SELECT * FROM assigntaxi WHERE to_route = ?", [route]);
     res.json(taxis);
   } catch (err) {
     console.error(err);
@@ -98,7 +99,7 @@ router.get("/assigned", verifyToken, async (req, res) => {
 
   try {
     const rows = await query(
-     "SELECT PlateNo, from_route,Status FROM assigntaxi"
+     "SELECT PlateNo, from_route,Status,to_route FROM assigntaxi"
 ,
       //[route]
     );
@@ -108,6 +109,34 @@ router.get("/assigned", verifyToken, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+
+router.get("/fetch-taxi/:plateNo", verifyToken, async (req, res) => {
+  const { plateNo } = req.params;
+
+  console.log(plateNo)
+  
+  if (!plateNo) {
+    return res.status(400).json({ message: "Plate number required" });
+  }
+
+  try {
+    const rows = await query(
+      "SELECT * FROM taxis WHERE PlateNo = ?",
+      [plateNo]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Taxi not found" });
+    }
+
+    res.json(rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 
 router.delete("/:plateNo", verifyToken, async (req, res) => {
   const { plateNo } = req.params;

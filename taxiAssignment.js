@@ -23,20 +23,20 @@ router.get("/", verifyToken, async (req, res) => {
       `
       SELECT 
           r.id,
-          CONCAT(r.StartTerminal, ' → ', r.EndTerminal) AS Routes,
+          CONCAT(r.station_name, ' → ', r.EndTerminal) AS Routes,
 
           -- Count taxis for this route
           (
               SELECT COUNT(*)
               FROM taxi_queue t
-              WHERE t.route = CONCAT(r.StartTerminal, ' → ', r.EndTerminal)
+              WHERE t.route = CONCAT(r.station_name, ' → ', r.EndTerminal) AND Status = 'available'
           ) AS Taxis,
 
           -- Get passenger waiting count
           (
               SELECT p.WaitingCount
               FROM passengerqueue p
-              WHERE p.route = CONCAT(r.StartTerminal, ' → ', r.EndTerminal)
+              WHERE p.route = CONCAT(r.station_name, ' → ', r.EndTerminal)
               LIMIT 1
           ) AS WaitingCount
 

@@ -13,7 +13,7 @@ import PassengerQueueRouter  from "./PassengerQueue.js";
 import dispacherRouteRouter from "./dispacherRoute.js";
 import taxiQueueRouter from "./taxiQueue.js";
 import assignTaxisRouter from "./assignTaxis.js";
-
+import smsRoutes from "./routes/sms.js";
 dotenv.config();
 
 
@@ -27,6 +27,7 @@ app.use("/passengerqueue", PassengerQueueRouter);
 app.use("/dispacher-route", dispacherRouteRouter);
 app.use("/taxi-queue", taxiQueueRouter);
 app.use("/assignTaxis", assignTaxisRouter);
+app.use("/api", smsRoutes);
 
 
 const query = promisify(db.query).bind(db);
@@ -38,7 +39,7 @@ app.post("/auth/login", async (req, res) => {
   try {
    
     const adminResults = await query(
-      "SELECT id, UserName, Password, role_id FROM stationadmins WHERE UserName = ?",
+      "SELECT id, UserName, Password, role_id, mustChangePassword FROM stationadmins WHERE UserName = ?",
       [UserName]
     );
     if (adminResults.length > 0) {
@@ -53,22 +54,52 @@ app.post("/auth/login", async (req, res) => {
         { expiresIn: "1d" }
       );
 
-      return res.json({ message: "Login successful", role: "stationAdmin", token });
+      return res.json({ 
+        message: "Login successful", 
+        role: "stationAdmin",
+         token, 
+         userId: admin.id,
+         mustChangePassword: admin.mustChangePassword === 1,});
     }
 
    
-    const dispatcherResults = await query(
-      "SELECT id, UserName, Password, role_id FROM dispachers WHERE UserName = ?",
-      [UserName]
-    );
-    if (dispatcherResults.length > 0) {
-      const dispatcher = dispatcherResults[0];
-      if (Password !== dispatcher.Password)
-        return res.status(400).json({ message: "Incorrect password" });
+    // const dispatcherResults = await query(
+    //   "SELECT id, UserName, Password, role_id FROM dispachers WHERE UserName = ?",
+    //   [UserName]
+    // );
+    // if (dispatcherResults.length > 0) {
+    //   const dispatcher = dispatcherResults[0];
+    //   if (Password !== dispatcher.Password)
+    //     return res.status(400).json({ message: "Incorrect password" });
 
-      const token = jwt.sign({ id: dispatcher.id, role: "dispacher" }, process.env.JWT_SECRET, { expiresIn: "1d" });
-      return res.json({ message: "Login successful", role: "dispacher", token });
-    }
+    //   const token = jwt.sign({ id: dispatcher.id, role: "dispacher" }, process.env.JWT_SECRET, { expiresIn: "1d" });
+    //   return res.json({ message: "Login successful", role: "dispacher", token });
+    // }
+const dispatcherResults = await query(
+  "SELECT id, UserName, Password, role_id, mustChangePassword FROM dispachers WHERE UserName = ?",
+  [UserName]
+);
+
+if (dispatcherResults.length > 0) {
+  const dispatcher = dispatcherResults[0];
+
+  if (Password !== dispatcher.Password)
+    return res.status(400).json({ message: "Incorrect password" });
+
+  const token = jwt.sign(
+    { id: dispatcher.id, role: "dispacher" },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+
+  return res.json({
+    message: "Login successful",
+    role: "dispacher",
+    token,
+    userId: dispatcher.id,
+    mustChangePassword: dispatcher.mustChangePassword === 1,
+  });
+}
 
     
     const userResults = await query(

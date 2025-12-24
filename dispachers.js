@@ -6,6 +6,21 @@ import { query } from "./index.js";
 const router = express.Router();
 
 
+
+router.get("/total", async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT count(*) AS total
+      FROM dispachers
+    `);
+
+    res.json(rows[0]); 
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
 function verifyToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   if (!authHeader) return res.status(401).json({ message: "No token provided" });
@@ -52,6 +67,37 @@ router.get("/", verifyToken, async (req, res) => {
   }
 });
 
+router.get("/:id", verifyToken, async (req, res) => {
+  if (req.user.role !== "stationAdmin") return res.status(403).json({ message: "Forbidden" });
+   const { id } = req.params;
+  try {
+    const rows = await query(
+      "SELECT * FROM dispachers WHERE id=? AND StationAdmins_id = ?",
+       [ id, req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("Fetch dispachers error:", err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
+
+
+
+router.get("/eachstation", verifyToken, async (req, res) => {
+  if (req.user.role !== "stationAdmin") return res.status(403).json({ message: "Forbidden" });
+
+  try {
+    const rows = await query(
+      " SELECT count(*) AS total FROM dispachers WHERE StationAdmins_id = ?",
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error("Fetch dispachers error:", err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
 
 router.put("/:id", (req, res) => {
   const { id } = req.params;
@@ -68,6 +114,38 @@ router.put("/:id", (req, res) => {
       return res.status(404).json({ message: "dispachers not found" });
 
     res.json({ message: "✅ dispacher updated successfully" });
+  });
+});
+
+
+
+router.put('/:id/changePassword', verifyToken, (req, res) => {
+  if (req.user.role !== 'dispacher') 
+    return res.status(403).json({ message: 'Forbidden' });
+
+  const { id } = req.params;
+  const { currentPassword, newPassword } = req.body;
+
+  // Get current password
+  const getSql = 'SELECT Password FROM dispachers WHERE id = ?';
+  db.query(getSql, [id], (err, results) => {
+    if (err) return res.status(500).json({ success: false, message: 'Server error' });
+    if (results.length === 0) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const storedPassword = results[0].Password;
+
+    // Check current password
+    if (currentPassword !== storedPassword) {
+      return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+    }
+
+    // Update password and reset mustChangePassword flag
+    const updateSql = 'UPDATE dispachers SET Password = ?, mustChangePassword = 0 WHERE id = ?';
+    db.query(updateSql, [newPassword, id], (updateErr, result) => {
+      if (updateErr) return res.status(500).json({ success: false, message: 'Failed to update password' });
+
+      res.json({ success: true, message: '✅ Password updated successfully' });
+    });
   });
 });
 
