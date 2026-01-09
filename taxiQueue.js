@@ -1,8 +1,87 @@
 import express from 'express';
-import { query } from './index.js'; // your db promisified query
+import { query } from './index.js';
 import jwt from 'jsonwebtoken';
-
+import { verifyToken } from './index.js';
 const router = express.Router();
+
+router.get('/total', async (req, res) => {
+  try {
+    const rows = await query(`
+      SELECT count(*) AS total
+      FROM taxi_queue
+    `);
+
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+router.get('/available', verifyToken, async (req, res) => {
+  if (req.user.role !== 'dispacher') {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  try {
+    const { currentRoute } = req.query;
+
+    if (!currentRoute) {
+      return res.status(400).json({ message: 'Route is required' });
+    }
+    const [startD, endD] = currentRoute.split('→').map((s) => s.trim());
+    const result = await query(
+      `SELECT COUNT(*) AS count 
+       FROM taxi_queue
+       WHERE (route = ? OR route = ?) AND status="available"`,
+      [`${startD} → ${endD}`, `${endD} → ${startD}`]
+    );
+
+    const count = result[0].count;
+    const taxis = await query(
+      `SELECT id, PlateNo, route 
+       FROM taxi_queue
+       WHERE (route = ? OR route = ?) AND status="available"`,
+      [`${startD} → ${endD}`, `${endD} → ${startD}`]
+    );
+
+    res.json({
+      count: count,
+      taxis: taxis,
+      normalized_route: `${startD} | ${endD}`,
+      original_route: currentRoute,
+      message: `Found ${count} taxis for route ${currentRoute} (vice-versa)`,
+    });
+  } catch (err) {
+    console.error('Count taxis error:', err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
+
+router.get('/availableTaxiseachstation', async (req, res) => {
+  try {
+    const { route } = req.query;
+
+    if (!route) {
+      return res.status(400).json({ message: 'route is required' });
+    }
+
+    const startStation = route.split('→')[0].trim();
+
+    const rows = await query(
+      `
+      SELECT COUNT (*) AS total
+      FROM taxi_queue
+      WHERE status ='available' AND route LIKE ?
+      `,
+      [`${startStation} →%`]
+    );
+
+    res.json({ total: rows[0].total || 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
+  }
+});
 
 router.get('/availableTaxiForDashboard', async (req, res) => {
   try {
@@ -43,50 +122,6 @@ router.get('/availableTaxiForDashboard', async (req, res) => {
   }
 });
 
-function verifyToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  if (!authHeader)
-    return res.status(401).json({ message: 'No token provided' });
-
-  const token = authHeader.split(' ')[1];
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: 'Invalid token' });
-    req.user = decoded;
-    next();
-  });
-}
-
-// Add taxi to queue
-// router.post("/", verifyToken, async (req, res) => {
-//   if (req.user.role !== "dispacher") return res.status(403).json({ message: "Only dispatchers can add taxis" });
-
-//   const { PlateNo,route } = req.body;
-//   if (!PlateNo|| !route) return res.status(400).json({ message: "PlateNo required" });
-
-//   try {
-//           const existing = await query(
-//       "SELECT route FROM taxi_queue WHERE PlateNo = ?",
-//       [PlateNo]
-//     );
-
-//     if (existing.length > 0) {
-//       return res.status(409).json({
-//         message: "Taxi is already in the queue",
-//         currentRoute: existing[0].route
-//       });
-//     }
-
-//     await query(
-//       "INSERT INTO taxi_queue (PlateNo, dispacher_id,route) VALUES (?, ?, ?)",
-//       [PlateNo, req.user.id,route]
-//     );
-//     res.json({ message: "Taxi added to queue" });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: err.sqlMessage || err.message });
-//   }
-// });
-
 router.post('/', verifyToken, async (req, res) => {
   if (req.user.role !== 'dispacher')
     return res.status(403).json({ message: 'Only dispatchers can add taxis' });
@@ -113,23 +148,19 @@ router.post('/', verifyToken, async (req, res) => {
       }
     }
 
-    // Add status with default 'available'
     await query(
-      'INSERT INTO taxi_queue (PlateNo, dispacher_id, route) VALUES (?, ?, ?)',
+      'INSERT INTO taxi_queue (PlateNo, dispacher_id, route, is_taxi_used) VALUES (?, ?, ?, 1)',
       [PlateNo, req.user.id, route]
     );
+
+    await query(`UPDATE assigntaxi SET is_taxi_used = 1 WHERE PlateNo = ?`, [
+      PlateNo,
+    ]);
 
     res.json({
       message: 'Taxi added to queue',
       status: 'available',
     });
-
-    //    if (existing.length > 0 && status === 'available') {
-    //   return res.status(409).json({
-    //     message: "Taxi is already in the queue",
-    //     currentRoute: existing[0].route
-    //   });
-    // }
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.sqlMessage || err.message });
@@ -165,55 +196,9 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-router.get('/availableTaxiseachstation', async (req, res) => {
-  try {
-    const { route } = req.query;
-
-    if (!route) {
-      return res.status(400).json({ message: 'route is required' });
-    }
-
-    // extract start station from route
-    const startStation = route.split('→')[0].trim();
-
-    const rows = await query(
-      `
-      SELECT COUNT (*) AS total
-      FROM taxi_queue
-      WHERE status ='available' AND route LIKE ?
-      `[`${startStation} →%`]
-    );
-
-    res.json({ total: rows[0].total || 0 });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-router.get('/total', async (req, res) => {
-  try {
-    const rows = await query(`
-      SELECT count(*) AS total
-      FROM taxi_queue
-    `);
-
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: err.message });
-  }
-});
-
-// Add this route to your existing taxi queue routes
 router.put('/:taxiId/status', async (req, res) => {
-  const { taxiId } = req.params; // This is actually the PlateNo
+  const { taxiId } = req.params;
   const { status } = req.body;
-
-  console.log('Received taxiId (PlateNo):', taxiId);
-  console.log('Received status:', status);
-
-  // Validate status
   const validStatuses = ['available', 'assigned'];
   if (!validStatuses.includes(status)) {
     return res
@@ -222,27 +207,20 @@ router.put('/:taxiId/status', async (req, res) => {
   }
 
   try {
-    // Check if taxi exists in queue
     const existing = await query(
       'SELECT PlateNo FROM taxi_queue WHERE PlateNo = ?',
-      [taxiId] // Use taxiId here since that's what we're passing
+      [taxiId]
     );
-
-    console.log('Database check result:', existing);
 
     if (existing.length === 0) {
       return res.status(404).json({
         message: `Taxi ${taxiId} not found in taxi_queue table`,
       });
     }
-
-    // Update the status
     const result = await query(
       'UPDATE taxi_queue SET Status = ? WHERE PlateNo = ?',
-      [status, taxiId] // Use taxiId here
+      [status, taxiId]
     );
-
-    console.log('Update successful, rows affected:', result.affectedRows);
 
     res.json({
       message: `Taxi ${taxiId} status updated to ${status}`,
@@ -255,7 +233,6 @@ router.put('/:taxiId/status', async (req, res) => {
   }
 });
 
-// REMOVE taxi from queue
 router.delete('/:PlateNo', verifyToken, async (req, res) => {
   if (req.user.role !== 'dispacher')
     return res

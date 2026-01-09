@@ -1,23 +1,63 @@
-
-import express from "express";
-import { query } from "./index.js"; // your db promisified query
-import jwt from "jsonwebtoken";
+import express from 'express';
+import { query } from './index.js';
+import jwt from 'jsonwebtoken';
+import { verifyToken } from './index.js';
 
 const router = express.Router();
 
-function verifyToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader) return res.status(401).json({ message: "No token provided" });
+router.get('/allStationInfo', verifyToken, async (req, res) => {
+  try {
+    const rows = await query(
+      `
+      SELECT 
+          r.id,
+          CONCAT(r.station_name, ' → ', r.EndTerminal) AS Routes,
 
-  const token = authHeader.split(" ")[1];
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: "Invalid token" });
-    req.user = decoded;
-    next();
-  });
-}
+          -- Available taxis
+          (
+              SELECT COUNT(*)
+              FROM taxi_queue t
+              WHERE t.route = CONCAT(r.station_name, ' → ', r.EndTerminal)
+              AND t.Status = 'available'
+          ) AS Taxis,
 
-router.get("/", verifyToken, async (req, res) => {
+          -- Total registered taxis
+          (
+              SELECT COUNT(*)
+              FROM taxis t
+              WHERE t.route = CONCAT(r.station_name, ' → ', r.EndTerminal)
+          ) AS RegisteredTaxis,
+
+          -- Waiting passengers
+          (
+              SELECT p.WaitingCount
+              FROM passengerqueue p
+              WHERE p.route = CONCAT(r.station_name, ' → ', r.EndTerminal)
+              LIMIT 1
+          ) AS WaitingCount,
+
+          -- Dispatcher name
+          (
+              SELECT d.FullName
+              FROM dispachers d
+              WHERE d.Routes = CONCAT(r.station_name, ' → ', r.EndTerminal)
+              LIMIT 1
+          ) AS Dispatcher
+
+      FROM routes r
+      WHERE r.StationAdmins_id = ?;
+      `,
+      [req.user.id]
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('Fetching error:', err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
+
+router.get('/', verifyToken, async (req, res) => {
   try {
     const rows = await query(
       `
@@ -37,6 +77,7 @@ router.get("/", verifyToken, async (req, res) => {
               SELECT p.WaitingCount
               FROM passengerqueue p
               WHERE p.route = CONCAT(r.station_name, ' → ', r.EndTerminal)
+               ORDER BY \`Timestamp\` DESC
               LIMIT 1
           ) AS WaitingCount
 
@@ -48,10 +89,9 @@ router.get("/", verifyToken, async (req, res) => {
 
     res.json(rows);
   } catch (err) {
-    console.error("Fetching error:", err);
+    console.error('Fetching error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
-
 
 export default router;

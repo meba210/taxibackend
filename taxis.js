@@ -1,163 +1,173 @@
-import express from "express";
-import { db } from "./server.js";
-import jwt from "jsonwebtoken";
-import { query } from "./index.js";
-
+import express from 'express';
+import { db } from './server.js';
+import jwt from 'jsonwebtoken';
+import { query } from './index.js';
+import { verifyToken } from './index.js';
 const router = express.Router();
 
-
-router.get("/total", async (req, res) => {
+router.get('/total', async (req, res) => {
   try {
     const rows = await query(`
       SELECT count(*) AS count
       FROM taxis
     `);
 
-    res.json(rows[0]); 
+    res.json(rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
   }
 });
 
+router.get('/existing-records', verifyToken, async (req, res) => {
+  try {
+    const allTaxis = await query('SELECT LicenceNo, PlateNo FROM taxis');
 
+    if (!allTaxis || allTaxis.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No existing records found',
+        data: { licenceNos: [], plateNos: [] },
+      });
+    }
 
+    const licenceNos = [
+      ...new Set(allTaxis.map((taxi) => taxi.LicenceNo).filter(Boolean)),
+    ];
+    const plateNos = [
+      ...new Set(allTaxis.map((taxi) => taxi.PlateNo).filter(Boolean)),
+    ];
 
-// Middleware to verify JWT token
-function verifyToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader) return res.status(401).json({ message: "No token provided" });
+    res.json({
+      success: true,
+      message: 'Fetched existing records successfully',
+      data: { licenceNos, plateNos },
+    });
+  } catch (error) {
+    console.error('Error fetching existing records:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch existing records',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
 
-  const token = authHeader.split(" ")[1];
-  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(403).json({ message: "Invalid token" });
-    req.user = decoded;
-    next();
-  });
-}
+router.post('/', verifyToken, async (req, res) => {
+  const { DriversName, PhoneNo, LicenceNo, PlateNo, route } = req.body;
 
-// Create a new taxi
-router.post("/", verifyToken, async (req, res) => {
-  const { DriversName,PhoneNo, LicenceNo, PlateNo, route} = req.body;
-
-  if (req.user.role !== "dispacher") {
-    return res.status(403).json({ message: "Forbidden: only dispatchers can create taxis" });
+  if (req.user.role !== 'dispacher') {
+    return res
+      .status(403)
+      .json({ message: 'Forbidden: only dispatchers can create taxis' });
   }
 
-  if (!DriversName || !PhoneNo|| !LicenceNo || !PlateNo || !route) {
-    return res.status(400).json({ message: "All fields are required" });
+  if (!DriversName || !PhoneNo || !LicenceNo || !PlateNo || !route) {
+    return res.status(400).json({ message: 'All fields are required' });
   }
 
   try {
     const result = await query(
-      "INSERT INTO taxis (DriversName,PhoneNo, LicenceNo, PlateNo, route, dispacher_id) VALUES (?, ?, ?, ?, ?, ?)",
-      [DriversName,PhoneNo, LicenceNo, PlateNo, route,req.user.id]
+      'INSERT INTO taxis (DriversName,PhoneNo, LicenceNo, PlateNo, route, dispacher_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [DriversName, PhoneNo, LicenceNo, PlateNo, route, req.user.id]
     );
 
-    res.status(201).json({ message: "Taxi created successfully", id: result.insertId });
+    res
+      .status(201)
+      .json({ message: 'Taxi created successfully', id: result.insertId });
   } catch (err) {
-    console.error("Create taxi error:", err);
+    console.error('Create taxi error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
 
+router.get('/allTaxis', (req, res) => {
+  db.query('SELECT * FROM taxis', (err, results) => {
+    if (err) {
+      return res.status(500).json({ message: 'Database error' });
+    }
+    res.status(200).json(results);
+  });
+});
 
-
-
-// router.get("/", verifyToken, async (req, res) => {
-//   if (req.user.role !== "dispacher") {
-//     return res.status(403).json({ message: "Forbidden: only dispatchers can view taxis" });
-//   }
-
-//   try {
-//     const rows = await query(
-//       "SELECT PlateNo FROM taxis WHERE dispacher_id = ?",
-//       [req.user.id]
-//     );
-
-//     res.json(rows);
-
-//   } catch (err) {
-//     console.error("Fetch taxis error:", err);
-//     res.status(500).json({ message: err.sqlMessage || err.message });
-//   }
-// });
-router.get("/taxisDetail/:id", verifyToken, async (req, res) => {
-  if (req.user.role !== "dispacher") {
+router.get('/taxisDetail/:id', verifyToken, async (req, res) => {
+  if (req.user.role !== 'dispacher') {
     return res.status(403).json({
-      message: "Forbidden: only dispatchers can see taxi detail",
+      message: 'Forbidden: only dispatchers can see taxi detail',
     });
   }
 
   const { id } = req.params;
 
   try {
-    const rows = await query(
-      "SELECT * FROM taxis WHERE id = ?",
-      [id, req.user.id]
-    );
+    const rows = await query('SELECT * FROM taxis WHERE id = ?', [
+      id,
+      req.user.id,
+    ]);
 
     if (rows.length === 0) {
-      return res.status(404).json({ message: "Taxi not found" });
+      return res.status(404).json({ message: 'Taxi not found' });
     }
 
-    res.json(rows[0]); // ✅ RETURN SINGLE OBJECT
+    res.json(rows[0]);
   } catch (err) {
-    console.error("Fetch taxi detail error:", err);
+    console.error('Fetch taxi detail error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
 
-
-router.get("/", verifyToken, async (req, res) => {
-  if (req.user.role !== "dispacher") {
-    return res.status(403).json({ message: "Forbidden" });
+router.get('/', verifyToken, async (req, res) => {
+  if (req.user.role !== 'dispacher') {
+    return res.status(403).json({ message: 'Forbidden' });
   }
 
   try {
     const { route } = req.query;
 
     if (!route) {
-      return res.status(400).json({ message: "Route is required" });
+      return res.status(400).json({ message: 'Route is required' });
     }
+    const [startD, endD] = route.split('→').map((s) => s.trim());
+    const normalizedDispatcherRoute = [startD, endD].sort().join(' | ');
 
-    // normalize dispatcher route
-    const [startD, endD] = route.split("→").map(s => s.trim());
-    const normalizedDispatcherRoute = [startD, endD].sort().join(" | ");
+    const rows = await query(`
+      SELECT 
+        t.*,
+        EXISTS (
+          SELECT 1
+          FROM taxi_queue tq
+          WHERE tq.PlateNo = t.PlateNo
+            AND tq.is_taxi_used = 1
+            AND tq.status = 'assigned'
+        ) AS isQueued
+      FROM taxis t
+      WHERE t.status = 'verified'
+    `);
 
-    // get all taxis
-    const rows = await query("SELECT * FROM taxis");
-
-    // filter only vice-versa matches
-    const filtered = rows.filter(taxi => {
+    const filtered = rows.filter((taxi) => {
       if (!taxi.route) return false;
 
-      const [start, end] = taxi.route.split("→").map(s => s.trim());
-      const normalizedTaxiRoute = [start, end].sort().join(" | ");
+      const [start, end] = taxi.route.split('→').map((s) => s.trim());
+      const normalizedTaxiRoute = [start, end].sort().join(' | ');
 
       return normalizedTaxiRoute === normalizedDispatcherRoute;
     });
 
     res.json(filtered);
-
   } catch (err) {
-    console.error("Fetch taxis error:", err);
+    console.error('Fetch taxis error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
 
-
-
-router.get("/eachstation", verifyToken, async (req, res) => {
+router.get('/eachstation', verifyToken, async (req, res) => {
   try {
     const { route } = req.query;
 
     if (!route) {
-      return res.status(400).json({ message: "route is required" });
+      return res.status(400).json({ message: 'route is required' });
     }
-
-    // extract start station from route
-    const startStation = route.split("→")[0].trim();
+    const startStation = route.split('→')[0].trim();
 
     const rows = await query(
       `
@@ -175,32 +185,28 @@ router.get("/eachstation", verifyToken, async (req, res) => {
   }
 });
 
-router.get("/available", verifyToken, async (req, res) => {
-  if (req.user.role !== "dispacher") {
-    return res.status(403).json({ message: "Forbidden" });
+router.get('/available', verifyToken, async (req, res) => {
+  if (req.user.role !== 'dispacher') {
+    return res.status(403).json({ message: 'Forbidden' });
   }
 
   try {
-    const { route } = req.query;
+    const { currentRoute } = req.query;
 
-    if (!route) {
-      return res.status(400).json({ message: "Route is required" });
+    if (!currentRoute) {
+      return res.status(400).json({ message: 'Route is required' });
     }
+    const [startD, endD] = currentRoute.split('→').map((s) => s.trim());
 
-    // Parse the route
-    const [startD, endD] = route.split("→").map(s => s.trim());
-    
-    // Get count of taxis that match either direction
     const result = await query(
       `SELECT COUNT(*) AS count 
-       FROM taxis 
+       FROM taxis_queue
        WHERE (route = ? OR route = ?)`,
       [`${startD} → ${endD}`, `${endD} → ${startD}`]
     );
 
     const count = result[0].count;
 
-    // If you need the actual taxis too:
     const taxis = await query(
       `SELECT id, PlateNo, route 
        FROM taxis 
@@ -208,66 +214,144 @@ router.get("/available", verifyToken, async (req, res) => {
       [`${startD} → ${endD}`, `${endD} → ${startD}`]
     );
 
-    res.json({ 
+    res.json({
       count: count,
-      taxis: taxis, // Include taxis if needed
+      taxis: taxis,
       normalized_route: `${startD} | ${endD}`,
-      original_route: route,
-      message: `Found ${count} taxis for route ${route} (vice-versa)`
+      original_route: currentRoute,
+      message: `Found ${count} taxis for route ${currentRoute} (vice-versa)`,
     });
-
   } catch (err) {
-    console.error("Count taxis error:", err);
+    console.error('Count taxis error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
 
-
-
-
-// Update taxi
-router.put("/:id", verifyToken, async (req, res) => {
+router.put('/:id/status', async (req, res) => {
   const { id } = req.params;
-  const { DriversName, LicenceNo, PlateNo } = req.body;
+  const { status } = req.body;
+
+  if (!status || !['verified', 'unverified'].includes(status)) {
+    return res
+      .status(400)
+      .json({ message: "Status must be 'verified' or 'unverified'" });
+  }
+
+  const sql = 'UPDATE taxis SET status = ? WHERE id = ?';
+  db.query(sql, [status, id], (err, result) => {
+    if (err) {
+      return res.status(500).json({ message: 'Database error', error: err });
+    }
+
+    if (result.affectedRows === 0)
+      return res.status(404).json({ message: 'taxi not found' });
+
+    res.json({
+      message: ` taxi ${status} successfully`,
+      status: status,
+    });
+  });
+});
+
+router.put('/:id', verifyToken, async (req, res) => {
+  const { id } = req.params;
+  let { DriversName, LicenceNo, PlateNo, PhoneNo } = req.body;
+  DriversName = String(DriversName || '').trim();
+  LicenceNo = String(LicenceNo || '').trim();
+  PlateNo = String(PlateNo || '').trim();
+  PhoneNo = String(PhoneNo || '').trim();
+
+  if (!DriversName || !LicenceNo || !PlateNo || !PhoneNo) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
 
   try {
+    const existingLicence = await query(
+      'SELECT id FROM taxis WHERE LicenceNo = ? AND id != ?',
+      [LicenceNo, id]
+    );
+
+    if (existingLicence.length > 0) {
+      return res.status(400).json({ message: 'Licence number already exists' });
+    }
+    const existingPlate = await query(
+      'SELECT id FROM taxis WHERE PlateNo = ? AND id != ?',
+      [PlateNo, id]
+    );
+
+    if (existingPlate.length > 0) {
+      return res.status(400).json({ message: 'Plate number already exists' });
+    }
+    if (!/^\+2519\d{8}$/.test(PhoneNo.replace(/\s/g, ''))) {
+      return res
+        .status(400)
+        .json({ message: 'Invalid phone number format. Use +2519XXXXXXXX' });
+    }
+    if (!/^\d{6}$/.test(LicenceNo)) {
+      return res
+        .status(400)
+        .json({ message: 'Licence number must be exactly 6 digits' });
+    }
+    if (!/^\d{5}$/.test(PlateNo)) {
+      return res
+        .status(400)
+        .json({ message: 'Plate number must be exactly 5 digits' });
+    }
+
     const result = await query(
-      "UPDATE taxis SET DriversName = ?, LicenceNo = ?, PlateNo = ? WHERE id = ?",
-      [DriversName, LicenceNo, PlateNo, id]
+      'UPDATE taxis SET DriversName = ?, LicenceNo = ?, PlateNo = ?, PhoneNo = ? WHERE id = ?',
+      [DriversName.trim(), LicenceNo, PlateNo, PhoneNo.replace(/\s/g, ''), id]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Taxi not found" });
+      return res.status(404).json({ message: 'Taxi not found' });
     }
 
-    res.json({ message: "Taxi updated successfully" });
+    res.json({
+      message: 'Taxi updated successfully',
+      taxi: {
+        id,
+        DriversName: DriversName.trim(),
+        LicenceNo,
+        PlateNo,
+        PhoneNo: PhoneNo.replace(/\s/g, ''),
+      },
+    });
   } catch (err) {
-    console.error("Update taxi error:", err);
+    console.error('Update taxi error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
 
-// Delete taxi
-router.delete("/:id", verifyToken, async (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
   const { id } = req.params;
 
   try {
-    const result = await query("DELETE FROM taxis WHERE id = ?", [id]);
+    const result = await query('DELETE FROM taxis WHERE id = ?', [id]);
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ message: "Taxi not found" });
+      return res.status(404).json({ message: 'Taxi not found' });
     }
 
-    res.json({ message: "Taxi deleted successfully" });
+    res.json({ message: 'Taxi deleted successfully' });
   } catch (err) {
-    console.error("Delete taxi error:", err);
+    console.error('Delete taxi error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });
 
+router.get('/plate/:plateNo', verifyToken, async (req, res) => {
+  const { plateNo } = req.params;
+
+  const rows = await query('SELECT * FROM taxis WHERE PlateNo = ? LIMIT 1', [
+    plateNo,
+  ]);
+
+  if (!rows.length) {
+    return res.status(404).json({ message: 'Taxi not found' });
+  }
+
+  res.json(rows[0]);
+});
+
 export default router;
-
-
-
-
-
