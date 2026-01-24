@@ -1,7 +1,7 @@
 import express from 'express';
 import { query } from './index.js';
 import jwt from 'jsonwebtoken';
-import { db } from './server.js';
+import { db, io } from './server.js';
 import { verifyToken } from './index.js';
 
 const router = express.Router();
@@ -29,6 +29,12 @@ router.post('/', verifyToken, async (req, res) => {
         [plateNo, from_route, routeName]
       );
     }
+
+    console.log('+++++++>>>>>>>>', from_route);
+
+    io.to(`route:${from_route}`).emit('taxi:assigned', {
+      from_route,
+    });
 
     res.json({ message: 'Taxi assigned successfully' });
   } catch (err) {

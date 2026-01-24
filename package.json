@@ -28,7 +28,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "mysql2": "^3.15.3",
-    "react-native": "^0.81.5"
+    "react-native": "^0.81.5",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

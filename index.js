@@ -55,6 +55,8 @@ app.post('/auth/login', async (req, res) => {
       [UserName]
     );
 
+    console.log(req.body, '=========== ', adminResults);
+
     if (adminResults.length > 0) {
       const admin = adminResults[0];
 
