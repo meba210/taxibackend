@@ -18,11 +18,56 @@ router.get('/total', async (req, res) => {
   }
 });
 
+// router.post('/', verifyToken, async (req, res) => {
+//   const { EndTerminal } = req.body;
+
+//   if (req.user.role !== 'stationAdmin') {
+//     return res.status(403).json({ message: 'Forbidden' });
+//   }
+
+//   try {
+//     const adminResult = await query(
+//       'SELECT Stations FROM stationadmins WHERE id = ?',
+//       [req.user.id]
+//     );
+
+//     if (adminResult.length === 0) {
+//       return res.status(404).json({ message: 'Station admin not found' });
+//     }
+
+//     const stationName = adminResult[0].Stations;
+
+//     if (!stationName) {
+//       return res.status(400).json({
+//         message:
+//           'Station admin is not assigned to any station. Please assign a station first.',
+//       });
+//     }
+
+//     const result = await query(
+//       'INSERT INTO routes (StationAdmins_id, station_name, EndTerminal) VALUES (?, ?, ?)',
+//       [req.user.id, stationName, EndTerminal]
+//     );
+
+//     res.json({
+//       message: 'Route created successfully',
+//       id: result.insertId,
+//       station_name: stationName,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.sqlMessage || err.message });
+//   }
+// });
+
 router.post('/', verifyToken, async (req, res) => {
   const { EndTerminal } = req.body;
 
   if (req.user.role !== 'stationAdmin') {
     return res.status(403).json({ message: 'Forbidden' });
+  }
+
+  if (!EndTerminal || EndTerminal.trim().length < 2) {
+    return res.status(400).json({ message: 'End terminal is required' });
   }
 
   try {
@@ -44,17 +89,34 @@ router.post('/', verifyToken, async (req, res) => {
       });
     }
 
-    const result = await query(
-      'INSERT INTO routes (StationAdmins_id, station_name, EndTerminal) VALUES (?, ?, ?)',
-      [req.user.id, stationName, EndTerminal]
+    const existingRoute = await query(
+      `
+      SELECT id 
+      FROM routes 
+      WHERE station_name = ? AND LOWER(EndTerminal) = LOWER(?)
+      `,
+      [stationName, EndTerminal.trim()]
     );
 
-    res.json({
+    if (existingRoute.length > 0) {
+      return res.status(409).json({ message: 'This route already exists' });
+    }
+
+    const result = await query(
+      `
+      INSERT INTO routes (StationAdmins_id, station_name, EndTerminal)
+      VALUES (?, ?, ?)
+      `,
+      [req.user.id, stationName, EndTerminal.trim()]
+    );
+
+    res.status(201).json({
       message: 'Route created successfully',
       id: result.insertId,
       station_name: stationName,
     });
   } catch (err) {
+    console.error('Create route error:', err);
     res.status(500).json({ message: err.sqlMessage || err.message });
   }
 });

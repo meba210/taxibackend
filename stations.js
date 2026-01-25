@@ -3,21 +3,36 @@ import { db } from './server.js';
 import { verifyToken } from './index.js';
 const router = express.Router();
 
-router.post('/', async (req, res) => {
+router.post('/', (req, res) => {
   const { StationName, City, location } = req.body;
 
-  if (!StationName || !City || !location) {
-    return res.status(400).json({ message: 'All fields are required' });
-  }
+  db.query(
+    'SELECT id FROM stations WHERE StationName = ?',
+    [StationName],
+    (err, existing) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ message: 'Database error' });
+      }
 
-  const sql =
-    'INSERT INTO stations (StationName,City,location ) VALUES (?, ?, ?)';
-  db.query(sql, [StationName, City, location], (err, result) => {
-    if (err) {
-      return res.status(500).json({ message: 'Database error' });
+      if (existing.length > 0) {
+        return res.status(409).json({ message: 'This station already exists' });
+      }
+
+      db.query(
+        'INSERT INTO stations (StationName, City, location) VALUES (?, ?, ?)',
+        [StationName, City, location],
+        (err) => {
+          if (err) {
+            console.error(err);
+            return res.status(500).json({ message: 'Database error' });
+          }
+
+          res.status(201).json({ message: 'Station created successfully' });
+        }
+      );
     }
-    res.status(200).json({ message: 'Station created successfully' });
-  });
+  );
 });
 
 router.get('/total', async (req, res) => {
