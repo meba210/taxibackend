@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
         sa.PhoneNumber,
         sa.UserName,
         'Station Admin' AS Role,
+         sa.Stations,
         CASE 
           WHEN sa.status = 1 THEN 'Active'
           ELSE 'Inactive'
@@ -30,6 +31,7 @@ router.get('/', async (req, res) => {
         d.PhoneNumber,
         d.UserName,
         'Dispatcher' AS Role,
+        d.Routes,
         CASE 
           WHEN d.status = 1 THEN 'Active'
           ELSE 'Inactive'
