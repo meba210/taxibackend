@@ -155,6 +155,21 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+router.get('/forAdmin', async (req, res) => {
+  // if (req.user.role !== 'stationAdmin')
+  //   return res.status(403).json({ message: 'Forbidden' });
+
+  try {
+    const rows = await query(
+      'SELECT id, station_name, EndTerminal FROM routes'
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Fetch routes error:', err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
   if (req.user.role !== 'stationAdmin')
     return res.status(403).json({ message: 'Forbidden' });

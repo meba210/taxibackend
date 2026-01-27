@@ -112,6 +112,30 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
+router.get('/forAdmin', async (req, res) => {
+  // if (req.user.role !== 'stationAdmin')
+  //   return res.status(403).json({ message: 'Forbidden' });
+
+  try {
+    const rows = await query('SELECT * FROM dispachers ');
+    res.json(rows);
+  } catch (err) {
+    console.error('Fetch dispachers error:', err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
+
+router.get('/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const rows = await query('SELECT * FROM dispachers WHERE id=? ', [id]);
+    res.json(rows);
+  } catch (err) {
+    console.error('Fetch dispachers error:', err);
+    res.status(500).json({ message: err.sqlMessage || err.message });
+  }
+});
+
 router.get('/:id', verifyToken, async (req, res) => {
   if (req.user.role !== 'stationAdmin')
     return res.status(403).json({ message: 'Forbidden' });
